@@ -1,3 +1,11 @@
 requests>=2.31
 psycopg2-binary>=2.9
 python-dotenv>=1.0
+
+# REST API 서버 (api.py — 플러터/안드로이드 연동)
+fastapi>=0.110
+uvicorn>=0.29
+
+# 알고리즘 시각화 (docs/make_figures.py)
+matplotlib>=3.8
+numpy>=1.26
