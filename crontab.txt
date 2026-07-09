@@ -1,0 +1,20 @@
+# 제주나우히어 수집 스케줄
+# 설치: crontab -e 로 열어서 추가 (PROJECT 경로는 실제 설치 위치로 수정)
+
+PROJECT=/opt/jeju-weather-pipeline
+PY=$PROJECT/.venv/bin/python
+
+# 단기예보: 발표(02,05,08,11,14,17,20,23시) +10분 제공 -> +15분 수집
+15 2,5,8,11,14,17,20,23 * * *  cd $PROJECT && $PY run.py village >> logs/cron.log 2>&1
+
+# 초단기실황: 매시 정시 관측, +10분 제공 -> 매시 15분 수집
+15 * * * *                     cd $PROJECT && $PY run.py nowcast >> logs/cron.log 2>&1
+
+# 초단기예보: 매시 30분 발표, 45분 이후 호출 -> 매시 50분 수집
+50 * * * *                     cd $PROJECT && $PY run.py ultra >> logs/cron.log 2>&1
+
+# 자외선지수: 발표(06,18시) -> 06:40, 18:40 수집
+40 6,18 * * *                  cd $PROJECT && $PY run.py uv >> logs/cron.log 2>&1
+
+# 제주 미세먼지: 매시 갱신 -> 매시 25분 수집
+25 * * * *                     cd $PROJECT && $PY run.py jeju_air >> logs/cron.log 2>&1
