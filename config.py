@@ -17,9 +17,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/jejunowher
 KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY", "")   # REST API 키 — 로컬(장소 검색)
 
 # Google Gemini (aistudio.google.com > Get API key) — 문구 생성 1순위
-# 기본은 비용 최소 모델(flash-lite). 2.0 계열은 2026-06-01 종료되어 2.5로 교체.
+# 기본은 비용 최소 stable 모델. 2.x 계열은 신규 계정에서 404(접근 불가)라 3.x로 교체.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # OpenAI (platform.openai.com) — GPT 문구 생성 (engine/nlg.py)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

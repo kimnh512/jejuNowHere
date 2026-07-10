@@ -131,10 +131,10 @@ _errors: list = []   # LLM 실패 사유 수집 (진단용, /nlg 응답의 llm_e
 
 
 # 앞에서 성공하면 그걸로 끝. 비용 우선순위: flash-lite → flash → latest.
-# (gemini-2.0-* 는 2026-06-01 종료되어 제거)
+# 2.x 계열은 신규 계정 404라 제거. gemini-flash-latest는 최신 stable을 자동 추종.
 GEMINI_FALLBACK_MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-flash-latest",
 ]
 
