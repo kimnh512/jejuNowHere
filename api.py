@@ -11,6 +11,7 @@
     GET /scores?lat=..&lon=..         활동별 적합도 + 지금/+1h/+2h/+3h 타임라인
     GET /scores?region=애월읍         (앱 GPS 대신 지역명으로도 가능)
     GET /recommend?lat=..&lon=..      가면 좋을 곳 5선 (카카오 장소 포함)
+    GET /nlg?activity=러닝&region=..   GPT 문구 3종 (추천 문장·복장·장소 소개)
 
 앱에서는 기기 GPS의 lat/lon을 그대로 쿼리로 넘기면 됩니다.
 스냅샷은 60초 캐시 — 데이터 자체가 매시 갱신이므로 충분합니다.
@@ -24,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import config
 import db
 import places
-from engine import boundaries, datasource, geo, ml, scoring
+from engine import boundaries, datasource, geo, ml, nlg, scoring
 
 app = FastAPI(title="제주나우히어 API", version="1.0")
 app.add_middleware(  # 앱/웹 개발 편의를 위한 CORS 허용
@@ -136,6 +137,54 @@ def scores(region: str | None = None,
         "best_regions": best,
         "missing": snap.get("missing", []),
     }
+
+
+@app.get("/nlg")
+def nlg_message(activity: str = "러닝",
+                place: str | None = Query(None, description="추천 장소명 (예: 서우봉). 없으면 지역명 사용"),
+                place_features: str | None = Query(None, description="장소 특징 (소개 문구 근거)"),
+                region: str | None = None,
+                lat: float | None = Query(None, ge=-90, le=90),
+                lon: float | None = Query(None, ge=-180, le=180)):
+    """GPT 문구 3종 — 앱 홈 화면용.
+
+    응답: recommendation_message(추천 문장), outfit(복장 리스트),
+          place_intro(장소 소개 한마디), llm(GPT 사용 여부)
+    """
+    regions, snaps = get_data()
+    reg, source = resolve_region(regions, region, lat, lon)
+    snap = snaps[reg["region_id"]]
+
+    results = scoring.score_all(snap)
+    if activity not in results:
+        raise HTTPException(404, f"'{activity}'은 지원 활동이 아닙니다: {list(results)}")
+    r = results[activity]
+
+    # 시간대별 예보 — "N시 이후 쾌적해져요" 팁의 근거 (지금, +1h, +2h, +3h)
+    base_hour = datetime.now().hour
+    hourly = []
+    for i, h in enumerate(snap.get("hours") or []):
+        if h:
+            hourly.append({"hour": (base_hour + i) % 24, "temp": h.get("tmp"),
+                           "humidity": h.get("reh"), "precip_prob": h.get("pop3")})
+
+    payload = {
+        "activity": activity,
+        "place": {"name": place or reg["name"], "features": place_features},
+        "weather": {"temp": snap.get("tmp"), "feels_like": snap.get("feel"),
+                    "humidity": snap.get("reh"), "wind_speed": snap.get("wsd"),
+                    "sky": snap.get("sky"), "precip_prob": snap.get("pop3"),
+                    "uv": snap.get("uv"), "pm10": snap.get("pm10")},
+        "suitability": {"score": r["score"], "veto": r["veto"],
+                        "reason": scoring.phrase(activity, r)},
+        "hourly": hourly,
+        "time_of_day": ("아침" if 5 <= base_hour < 11 else "낮" if 11 <= base_hour < 17
+                        else "저녁" if 17 <= base_hour < 21 else "밤"),
+    }
+    out = nlg.generate(payload)
+    out["location"] = {"region": reg["name"], "city": reg["city"], "source": source}
+    out["suitability"] = payload["suitability"]
+    return out
 
 
 @app.get("/recommend")

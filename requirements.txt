@@ -6,6 +6,9 @@ python-dotenv>=1.0
 fastapi>=0.110
 uvicorn>=0.29
 
+# GPT 문구 생성 (engine/nlg.py)
+openai>=1.30
+
 # 알고리즘 시각화 (docs/make_figures.py)
 matplotlib>=3.8
 numpy>=1.26

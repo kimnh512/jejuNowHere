@@ -15,6 +15,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/jejunowher
 
 # 카카오 (developers.kakao.com > 내 애플리케이션 > 앱 키)
 KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY", "")   # REST API 키 — 로컬(장소 검색)
+
+# OpenAI (platform.openai.com) — GPT 문구 생성 (engine/nlg.py)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 # 지도 표시는 앱(플러터/안드로이드)에서 카카오맵 SDK로 처리 — 서버 키 불필요
 
 # ── 기상청 단기예보 조회서비스(2.0) ─────────────────────
