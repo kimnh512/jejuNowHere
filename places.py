@@ -53,6 +53,31 @@ def kakao_search(query: str, lat: float, lon: float, radius=10000, size=5) -> li
     return r.json().get("documents", [])
 
 
+_image_cache: dict = {}
+
+
+def kakao_image(place_name: str) -> str | None:
+    """카카오 이미지 검색 — 장소 대표 사진 1장 (실패해도 추천은 계속)."""
+    if place_name in _image_cache:
+        return _image_cache[place_name]
+    url = None
+    try:
+        r = requests.get(
+            "https://dapi.kakao.com/v2/search/image",
+            headers={"Authorization": f"KakaoAK {config.KAKAO_REST_KEY}"},
+            params={"query": f"제주 {place_name}", "size": 1, "sort": "accuracy"},
+            timeout=config.TIMEOUT,
+        )
+        if r.ok:
+            docs = r.json().get("documents", [])
+            if docs:
+                url = docs[0].get("thumbnail_url") or docs[0].get("image_url")
+    except requests.RequestException:
+        pass
+    _image_cache[place_name] = url
+    return url
+
+
 def best_region_for(activity: str, all_results: dict, snaps: dict):
     ranked = [(rid, res[activity]["score"]) for rid, res in all_results.items()
               if res[activity]["score"] is not None and not res[activity]["veto"]]
@@ -96,6 +121,7 @@ def pick_places(region: dict, regions: list[dict], snaps: dict,
                     "address": d.get("road_address_name") or d.get("address_name", ""),
                     "category": d.get("category_name", "").split(">")[-1].strip(),
                     "url": d.get("place_url", ""),
+                    "image": kakao_image(d["place_name"]),   # 대표 사진 (카카오 이미지 검색)
                     "lat": plat, "lon": plon,
                     "dist_km": round(geo.haversine_km(
                         region["lat"], region["lon"], plat, plon), 1),
