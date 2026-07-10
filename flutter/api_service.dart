@@ -59,6 +59,8 @@ class ApiService {
     return {
       'title': (d['place_intro'] ?? '').toString(),
       'desc': (d['recommendation_message'] ?? '').toString(),
+      // 추천 의상 리스트 → '볼캡 · 반팔 티셔츠 · ...' 형태
+      'outfit': ((d['outfit'] as List?) ?? []).join(' · '),
     };
   }
 

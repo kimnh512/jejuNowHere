@@ -109,6 +109,7 @@ def generate(payload: dict, lang: str = "ko") -> dict:
         _cache[key] = (time.time(), dict(data))
         return data
     out = _fallback(payload, lang)
+    out["llm_error"] = _last_error or "GEMINI_API_KEY/OPENAI_API_KEY 미설정"
     _cache[key] = (time.time(), dict(out))
     return out
 
@@ -125,9 +126,14 @@ def _valid(data) -> dict | None:
     return None
 
 
+_last_error: str | None = None   # 마지막 LLM 실패 사유 (진단용, /nlg 응답에 노출)
+
+
 def _gemini(payload: dict, lang_rule: str) -> dict | None:
     """Google Gemini (generateContent REST) — 무료 티어라 1순위."""
+    global _last_error
     if not config.GEMINI_API_KEY:
+        _last_error = "GEMINI_API_KEY 미설정 (Render Environment 확인)"
         return None
     try:
         r = requests.post(
@@ -146,14 +152,21 @@ def _gemini(payload: dict, lang_rule: str) -> dict | None:
             },
             timeout=12,
         )
-        r.raise_for_status()
+        if not r.ok:
+            _last_error = f"Gemini {r.status_code}: {r.text[:200]}"
+            return None
         text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return _valid(json.loads(text))
-    except Exception:
+        out = _valid(json.loads(text))
+        if out is None:
+            _last_error = "Gemini 응답 형식 불일치"
+        return out
+    except Exception as e:
+        _last_error = f"Gemini 예외: {e}"
         return None
 
 
 def _openai(payload: dict, lang_rule: str) -> dict | None:
+    global _last_error
     client = _get_client()
     if client is None:
         return None
@@ -169,7 +182,8 @@ def _openai(payload: dict, lang_rule: str) -> dict | None:
             ],
         )
         return _valid(json.loads(completion.choices[0].message.content))
-    except Exception:
+    except Exception as e:
+        _last_error = f"OpenAI 예외: {e}"
         return None
 
 

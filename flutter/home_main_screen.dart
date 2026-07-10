@@ -108,7 +108,8 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
       final pl = await ApiService.getRecommendations(_lat, _lon, activity: act);
 
       if (ai != null) {
-        _aiData = {'title': ai['title'] ?? '', 'desc': ai['desc'] ?? ''};
+        _aiData = {'title': ai['title'] ?? '', 'desc': ai['desc'] ?? '',
+                   'outfit': ai['outfit'] ?? ''};
       }
       _places = pl;
 
@@ -281,10 +282,6 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
                             ),
                             const SizedBox(height: 20),
 
-                            // ① 종합 적합도 — 최상단 큰 카드
-                            _overallCard(),
-                            const SizedBox(height: 14),
-
                             Text(_aiData['desc'] ?? '',
                                 style: const TextStyle(
                                     fontSize: 17,
@@ -369,7 +366,8 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
     );
   }
 
-  // 종합 적합도 카드 (활동 아이콘 + 점수 + 한줄평)
+  // 종합 적합도 히어로 카드 — 연한 하늘색, 3:4 비율
+  // [왼쪽 절반: 활동 아이콘] [가운데: 추천 의상] [오른쪽: 적합도]
   Widget _overallCard() {
     final score = _current?['score']?.toString() ?? '-';
     final phrase = _current?['phrase']?.toString() ?? '';
@@ -381,44 +379,96 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
             : (int.tryParse(score) ?? 0) >= 40
                 ? Colors.orange
                 : Colors.red;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(24)),
-      child: Row(
-        children: [
-          Image.asset(
-              'assets/icons/${_activityIcons[_activity] ?? 'running.png'}',
-              width: 53, height: 53), // 48→53 (10%↑)
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    TX(_activity,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 6),
-                    TX('적합도',
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.grey)),
-                  ],
+    final outfits = (_aiData['outfit'] ?? '')
+        .split(' · ')
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+
+    return AspectRatio(
+      aspectRatio: 4 / 3, // 가로 4 : 세로 3
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F0FF), // 살짝 연한 하늘색
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 왼쪽 절반: 활동 아이콘 크게
+            Expanded(
+              flex: 5,
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/${_activityIcons[_activity] ?? 'running.png'}',
+                  fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 2),
-                Text(phrase,
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.grey),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
-              ],
+              ),
             ),
-          ),
-          Text(score,
-              style: TextStyle(
-                  fontSize: 40, fontWeight: FontWeight.bold, color: color)),
-        ],
+            const SizedBox(width: 12),
+            // 가운데: 추천 의상
+            Expanded(
+              flex: 3,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TX('추천 의상',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueGrey)),
+                  const SizedBox(height: 8),
+                  ...outfits.take(5).map((o) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(o,
+                              style: const TextStyle(fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // 오른쪽: 적합도
+            Expanded(
+              flex: 3,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TX(_activity,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold)),
+                  TX('적합도',
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.blueGrey)),
+                  const SizedBox(height: 6),
+                  Text(score,
+                      style: TextStyle(
+                          fontSize: 52,
+                          fontWeight: FontWeight.bold,
+                          color: color)),
+                  const SizedBox(height: 6),
+                  Text(phrase,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.blueGrey),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -486,7 +536,11 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
   }
 
   Widget _buildBody() {
-    final children = <Widget>[];
+    final children = <Widget>[
+      // 종합 적합도 카드 — 추천 문구 바로 아래, 3:4 히어로 카드
+      _overallCard(),
+      const SizedBox(height: 20),
+    ];
     if (_chip != '코스') {
       children.addAll(_factors.map(_factorCard));
     }
@@ -537,7 +591,7 @@ class _HomeMainScreenState extends State<HomeMainScreen> {
                 Column(
                   children: [
                     Image.asset('assets/icons/${f['icon']}',
-                        width: 35, height: 35), // 32→35 (10%↑)
+                        width: 46, height: 46), // 기상 아이콘 확대
                     const SizedBox(height: 4),
                     TX(f['title'],
                         style: const TextStyle(
