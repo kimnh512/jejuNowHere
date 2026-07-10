@@ -1,11 +1,14 @@
 # JejuNowHere - Windows Task Scheduler registration
-# Run   : powershell -ExecutionPolicy Bypass -File register_tasks.ps1
-# Remove: powershell -ExecutionPolicy Bypass -File register_tasks.ps1 -Remove
+# Run          : powershell -ExecutionPolicy Bypass -File register_tasks.ps1
+# Server (+API): powershell -ExecutionPolicy Bypass -File register_tasks.ps1 -WithApi
+#                (-WithApi registers the FastAPI server as a startup task + opens firewall port 8000;
+#                 run PowerShell as Administrator for the firewall rule)
+# Remove       : powershell -ExecutionPolicy Bypass -File register_tasks.ps1 -Remove
 
-param([switch]$Remove)
+param([switch]$Remove, [switch]$WithApi)
 
 $Dir = $PSScriptRoot
-$Names = @("JejuNowHere-Hourly", "JejuNowHere-Village", "JejuNowHere-UV")
+$Names = @("JejuNowHere-Hourly", "JejuNowHere-Village", "JejuNowHere-UV", "JejuNowHere-API")
 
 if ($Remove) {
     foreach ($n in $Names) {
@@ -47,6 +50,26 @@ $t3 = @(
 Register-ScheduledTask -TaskName $Names[2] -Action (Act "collect_uv.bat") `
     -Trigger $t3 -Settings $Settings -Force | Out-Null
 Write-Host "Registered: JejuNowHere-UV      - 06:40 / 18:40 (uv)"
+
+# 4) API server (server deployment only, -WithApi)
+if ($WithApi) {
+    $ApiSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 999 `
+        -RestartInterval (New-TimeSpan -Minutes 1)
+    $t4 = New-ScheduledTaskTrigger -AtStartup
+    Register-ScheduledTask -TaskName $Names[3] -Action (Act "start_api.bat") `
+        -Trigger $t4 -Settings $ApiSettings -Force | Out-Null
+    Start-ScheduledTask -TaskName $Names[3]
+    Write-Host "Registered: JejuNowHere-API     - at startup, port 8000 (started now)"
+    try {
+        New-NetFirewallRule -DisplayName "JejuNowHere API 8000" -Direction Inbound `
+            -Protocol TCP -LocalPort 8000 -Action Allow -ErrorAction Stop | Out-Null
+        Write-Host "Firewall  : inbound TCP 8000 allowed"
+    } catch {
+        Write-Host "Firewall  : rule failed (run PowerShell as Administrator), $_"
+    }
+}
 
 Write-Host ""
 Write-Host "Done. Check: taskschd.msc > Task Scheduler Library"

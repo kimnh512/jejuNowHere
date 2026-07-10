@@ -94,6 +94,8 @@ uvicorn api:app --host 0.0.0.0 --port 8000      # 개발 중엔 --reload 추가
 앱은 기기 GPS의 lat/lon을 쿼리로 넘기면 됩니다 (`region=애월읍`도 가능).
 자동 문서: 서버 실행 후 `http://localhost:8000/docs` (Swagger).
 스냅샷은 60초 캐시. 같은 PC의 에뮬레이터에서는 `http://10.0.2.2:8000` 사용.
+
+**클라우드 배포**: Azure Windows VM 배포 절차는 [DEPLOY.md](DEPLOY.md) 참고.
 ```
 engine/
   boundaries.py       # 경계값·가중치·Veto·의상 테이블
@@ -117,4 +119,37 @@ nowhere.py            # 추천 CLI 진입점
 - `areaNo`(제주 5011000000 / 서귀포 5013000000) + `time`(YYYYMMDDHH)으로 호출.
 - 응답은 오늘/내일/모레/글피 **일 단위** 지수. 오늘값은 06시 발표에만,
   글피값은 18시 발표에만 옴 → 빈 값은 정상 처리(skip).
-- 지수 해석: 0-2 낮음 / 3-5 보통 / 6-7 높음 / 8-1
+- 지수 해석: 0-2 낮음 / 3-5 보통 / 6-7 높음 / 8-10 매우높음 / 11+ 위험.
+
+**제주 대기환경** (미세먼지 중심)
+- 엔드포인트: `https://air.jeju.go.kr/rest/JejuAirService/getJejuAirList/?date=YYYYMMDD`
+  — **인증키 불필요**, 당일 시간별 XML 반환.
+- SITE 코드 → 측정소명 매핑은 `config.JEJU_AIR_SITES` (12곳 전수 확인:
+  711 이도동 / 712 연동 / 713 한림읍 / 714 조천읍 / 715 화북동 / 716 애월 /
+  721 동홍동 / 722 성산 / 723 대정 / 724 남원 / 725 강정동 / 801 노형동).
+- PM10·PM2.5만 저장. DT10의 24시는 익일 00시로 정규화.
+
+**예보 보관 정책 (실시간 중심)**
+- 서비스가 "지금 · +1h · +2h · +3h"에 집중하므로 **+6시간 이후 예보는
+  저장하지 않고, 기존 초과분도 수집 시 자동 삭제**됩니다
+  (`config.FORECAST_HORIZON_HOURS`, `db.purge_future`).
+- 파고(WAV)·일 최저/최고 기온은 6시간 이내 데이터로 유지.
+
+## 파일 구조
+
+```
+schema.sql            # locations + 데이터 테이블 5개 + collect_log
+config.py             # 키, 엔드포인트, 읍면 14곳 + 측정소/지점코드 매핑
+grid_converter.py     # 위경도 -> nx/ny (기상청 공식 LCC 공식)
+seed_locations.py     # locations 시드
+db.py                 # 커넥션/upsert/이력
+collectors/
+  common.py           # 공통 호출(재시도), 결측·범주 파싱, 피벗
+  village.py          # 단기예보
+  nowcast.py          # 초단기실황
+  ultra.py            # 초단기예보
+  uv.py               # 자외선지수
+  jeju_air.py         # 제주 미세먼지
+run.py                # 진입점
+crontab.txt           # 스케줄
+```
