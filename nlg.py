@@ -130,39 +130,52 @@ def _valid(data) -> dict | None:
 _errors: list = []   # LLM 실패 사유 수집 (진단용, /nlg 응답의 llm_error에 노출)
 
 
+# 앞에서 성공하면 그걸로 끝. 비용 우선순위: flash-lite → flash → latest.
+# (gemini-2.0-* 는 2026-06-01 종료되어 제거)
+GEMINI_FALLBACK_MODELS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+]
+
+
 def _gemini(payload: dict, lang_rule: str) -> dict | None:
     """Google Gemini (generateContent REST) — 무료 티어라 1순위."""
     if not config.GEMINI_API_KEY:
         _errors.append("Gemini: GEMINI_API_KEY 미설정 (Render Environment 확인)")
         return None
-    try:
-        r = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{config.GEMINI_MODEL}:generateContent",
-            params={"key": config.GEMINI_API_KEY},
-            json={
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT + lang_rule + (
-                    '\n\n반드시 아래 형태의 JSON 하나로만 답하세요:\n'
-                    '{"recommendation_message": "...", '
-                    '"outfit": ["...", "..."], "place_intro": "..."}')}]},
-                "contents": [{"parts": [{"text":
-                    json.dumps(payload, ensure_ascii=False)}]}],
-                "generationConfig": {"temperature": 0.7,
-                                     "response_mime_type": "application/json"},
-            },
-            timeout=12,
-        )
-        if not r.ok:
-            _errors.append(f"Gemini {r.status_code}: {r.text[:200]}")
-            return None
-        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        out = _valid(json.loads(text))
-        if out is None:
-            _errors.append("Gemini 응답 형식 불일치")
-        return out
-    except Exception as e:
-        _errors.append(f"Gemini 예외: {e}")
-        return None
+    models = [config.GEMINI_MODEL] + [
+        m for m in GEMINI_FALLBACK_MODELS if m != config.GEMINI_MODEL]
+    for model in models:
+        try:
+            r = requests.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent",
+                params={"key": config.GEMINI_API_KEY},
+                json={
+                    "system_instruction": {"parts": [{"text": SYSTEM_PROMPT + lang_rule + (
+                        '\n\n반드시 아래 형태의 JSON 하나로만 답하세요:\n'
+                        '{"recommendation_message": "...", '
+                        '"outfit": ["...", "..."], "place_intro": "..."}')}]},
+                    "contents": [{"parts": [{"text":
+                        json.dumps(payload, ensure_ascii=False)}]}],
+                    "generationConfig": {"temperature": 0.7,
+                                         "response_mime_type": "application/json"},
+                },
+                timeout=12,
+            )
+            if not r.ok:
+                _errors.append(f"Gemini({model}) {r.status_code}: {r.text[:120]}")
+                continue  # 다음 모델 시도
+            text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            out = _valid(json.loads(text))
+            if out is None:
+                _errors.append(f"Gemini({model}) 응답 형식 불일치")
+                continue
+            return out
+        except Exception as e:
+            _errors.append(f"Gemini({model}) 예외: {e}")
+    return None
 
 
 def _openai(payload: dict, lang_rule: str) -> dict | None:

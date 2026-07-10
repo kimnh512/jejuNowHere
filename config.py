@@ -16,9 +16,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/jejunowher
 # 카카오 (developers.kakao.com > 내 애플리케이션 > 앱 키)
 KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY", "")   # REST API 키 — 로컬(장소 검색)
 
-# Google Gemini (aistudio.google.com > Get API key) — 무료 티어, 문구 생성 1순위
+# Google Gemini (aistudio.google.com > Get API key) — 문구 생성 1순위
+# 기본은 비용 최소 모델(flash-lite). 2.0 계열은 2026-06-01 종료되어 2.5로 교체.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
 # OpenAI (platform.openai.com) — GPT 문구 생성 (engine/nlg.py)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
