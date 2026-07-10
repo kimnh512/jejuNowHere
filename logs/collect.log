@@ -1,0 +1,38 @@
+2026-07-09 23:09:31,414 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-09 23:09:48,366 INFO run: [ultra] 성공 — 84행 적재
+2026-07-09 23:09:57,908 INFO run: [jeju_air] 성공 — 274행 적재
+2026-07-09 23:10:38,701 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-09 23:10:48,903 INFO run: [ultra] 성공 — 84행 적재
+2026-07-09 23:10:51,303 INFO run: [jeju_air] 성공 — 274행 적재
+2026-07-09 23:11:13,871 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-09 23:15:34,704 INFO run: [village] 성공 — 84행 적재
+2026-07-10 08:54:42,152 INFO run: [uv] 성공 — 6행 적재
+2026-07-10 09:50:35,403 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 10:50:59,964 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 10:51:40,855 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 10:51:43,072 INFO run: [jeju_air] 성공 — 120행 적재
+2026-07-10 11:15:44,178 WARNING collectors.common: 호출 실패 (1/3) HTTPConnectionPool(host='apis.data.go.kr', port=80): Read timed out. (read timeout=10) — 1s 후 재시도
+2026-07-10 11:16:03,960 WARNING collectors.common: 호출 실패 (1/3) HTTPConnectionPool(host='apis.data.go.kr', port=80): Read timed out. (read timeout=10) — 1s 후 재시도
+2026-07-10 11:16:15,938 WARNING collectors.common: 호출 실패 (2/3) HTTPConnectionPool(host='apis.data.go.kr', port=80): Read timed out. (read timeout=10) — 2s 후 재시도
+2026-07-10 11:16:38,134 WARNING collectors.common: 호출 실패 (1/3) HTTPConnectionPool(host='apis.data.go.kr', port=80): Read timed out. (read timeout=10) — 1s 후 재시도
+2026-07-10 11:16:57,277 INFO run: [village] 성공 — 84행 적재
+2026-07-10 12:58:17,357 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 12:58:53,438 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 12:59:04,710 INFO run: [jeju_air] 성공 — 144행 적재
+2026-07-10 13:50:59,531 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 13:51:47,349 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 13:51:54,599 INFO run: [jeju_air] 성공 — 156행 적재
+2026-07-10 14:50:59,394 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 15:50:58,324 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 15:51:50,950 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 15:51:55,652 INFO run: [jeju_air] 성공 — 178행 적재
+^C2026-07-10 18:40:13,278 INFO run: [uv] 성공 — 8행 적재
+2026-07-10 18:50:20,317 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 18:50:33,987 WARNING collectors.common: 호출 실패 (1/3) 429 Client Error: Too Many Requests for url: http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=7e6e33274666642daf75506d9c0364245a13d09a1475f5eb53fdfb6525daf4b3&dataType=JSON&numOfRows=1000&pageNo=1&base_date=20260710&base_time=1830&nx=49&ny=33 — 1s 후 재시도
+2026-07-10 18:50:35,037 WARNING collectors.common: 호출 실패 (2/3) 429 Client Error: Too Many Requests for url: http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=7e6e33274666642daf75506d9c0364245a13d09a1475f5eb53fdfb6525daf4b3&dataType=JSON&numOfRows=1000&pageNo=1&base_date=20260710&base_time=1830&nx=49&ny=33 — 2s 후 재시도
+2026-07-10 18:50:39,568 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 18:50:42,843 INFO run: [jeju_air] 성공 — 211행 적재
+2026-07-10 19:51:02,685 INFO run: [nowcast] 성공 — 14행 적재
+2026-07-10 19:53:13,040 INFO run: [ultra] 성공 — 84행 적재
+2026-07-10 19:54:09,952 INFO run: [jeju_air] 성공 — 222행 적재
+2026-07-10 20:17:50,186 INFO run: [village] 성공 — 84행 적재

@@ -50,8 +50,8 @@ def kakao_search(query: str, lat: float, lon: float, radius=10000, size=5) -> li
     )
     if r.status_code in (401, 403):
         raise RuntimeError(
-            "카카오 키 거부(401) — developers.kakao.com 앱 키 4개 중 "
-            "'REST API 키'를 넣었는지 확인하세요 (JavaScript 키 아님)")
+            f"카카오 키 거부({r.status_code}) — ① REST API 키가 맞는지 "
+            f"② 앱의 '카카오맵' 제품이 활성화됐는지 확인. 카카오 응답: {r.text[:200]}")
     r.raise_for_status()
     return r.json().get("documents", [])
 
@@ -91,13 +91,22 @@ def best_region_for(activity: str, all_results: dict, snaps: dict):
 
 
 def pick_places(region: dict, regions: list[dict], snaps: dict,
-                all_results: dict, want=5) -> list[dict]:
-    """점수 상위 활동 순회 → 활동별 최적 읍면 주변 검색 → 총 want곳."""
+                all_results: dict, want=5, only: str | None = None) -> list[dict]:
+    """활동별 최적 읍면 주변에서 실제 장소 검색.
+
+    only=활동명: 그 활동의 장소만 want곳 (앱의 활동 탭용).
+    only=None : 점수 상위 활동 순회, 활동당 최대 2곳 (종합 추천).
+    """
     my_results = all_results[region["region_id"]]
-    acts = sorted(
-        (a for a in boundaries.ACTIVITIES
-         if my_results[a]["score"] is not None and not my_results[a]["veto"]),
-        key=lambda a: -my_results[a]["score"])
+    if only:
+        acts = [only] if only in my_results else []
+        cap = want
+    else:
+        acts = sorted(
+            (a for a in boundaries.ACTIVITIES
+             if my_results[a]["score"] is not None and not my_results[a]["veto"]),
+            key=lambda a: -my_results[a]["score"])
+        cap = 2
 
     picks, seen = [], set()
     for act in acts:
@@ -129,9 +138,9 @@ def pick_places(region: dict, regions: list[dict], snaps: dict,
                     "dist_km": round(geo.haversine_km(
                         region["lat"], region["lon"], plat, plon), 1),
                 })
-                if len(picks) >= want or len([p for p in picks if p["activity"] == act]) >= 2:
+                if len(picks) >= want or len([p for p in picks if p["activity"] == act]) >= cap:
                     break
-            if len(picks) >= want or len([p for p in picks if p["activity"] == act]) >= 2:
+            if len(picks) >= want or len([p for p in picks if p["activity"] == act]) >= cap:
                 break
     return picks[:want]
 
@@ -149,14 +158,15 @@ def print_picks(region: dict, source: str, picks: list[dict]):
         print("  추천할 장소가 없습니다 (모든 활동 veto 또는 검색 결과 없음).")
 
 
-def recommend(region: dict, regions: list[dict]) -> dict:
+def recommend(region: dict, regions: list[dict],
+              activity: str | None = None) -> dict:
     """앱/API에서 그대로 쓸 수 있는 추천 결과 구조.
 
-    플러터/안드로이드 연동 시 이 함수를 REST API(FastAPI 등)로 감싸면 됩니다.
+    activity 지정 시 그 활동에 적합한 장소만 반환 (앱의 활동 탭용).
     """
     snaps = datasource.load(regions)
     all_results = {rid: scoring.score_all(s) for rid, s in snaps.items()}
-    picks = pick_places(region, regions, snaps, all_results)
+    picks = pick_places(region, regions, snaps, all_results, only=activity)
     me = snaps[region["region_id"]]
     return {
         "location": {"region": region["name"], "city": region["city"],

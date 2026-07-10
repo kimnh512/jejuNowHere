@@ -227,3 +227,6 @@ def fig_logistic():
 
 if __name__ == "__main__":
     fig_trapezoids()
+    fig_weights()
+    fig_logistic()
+    print("생성 완료: docs/fig1_trapezoids.png, fig2_weights.png, fig3_logistic.png")

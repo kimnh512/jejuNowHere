@@ -148,6 +148,9 @@ def scores(region: str | None = None,
         "activities": {a: {"score": r["score"], "veto": r["veto"],
                            "phrase": scoring.phrase(a, r),
                            "timeline": timeline[a],
+                           # 기상 요인별 개별 적합도 (0~100): feel/wsd/pop3/pm25/uv...
+                           "factors": {v: round(sub * 100)
+                                       for v, (sub, w) in r.get("parts", {}).items()},
                            "ml": a in ml_used}
                        for a, r in results.items()},
         "best_regions": best,
@@ -208,14 +211,17 @@ def nlg_message(activity: str = "러닝",
 
 @app.get("/recommend")
 def recommend(region: str | None = None,
+              activity: str | None = Query(None, description="지정 시 그 활동의 장소만 (예: 골프)"),
               lat: float | None = Query(None, ge=-90, le=90),
               lon: float | None = Query(None, ge=-180, le=180)):
     if not config.KAKAO_REST_KEY:
         raise HTTPException(503, "서버에 KAKAO_REST_KEY가 없습니다 (Render Environment 확인)")
+    if activity and activity not in boundaries.ACTIVITIES:
+        raise HTTPException(404, f"'{activity}'은 지원 활동이 아닙니다: {boundaries.ACTIVITIES}")
     regions, snaps = get_data()
     reg, source = resolve_region(regions, region, lat, lon)
     try:
-        out = places.recommend(reg, regions)
+        out = places.recommend(reg, regions, activity=activity)
     except Exception as e:                       # 카카오 호출 실패 원인을 그대로 노출
         raise HTTPException(502, f"카카오 장소 검색 실패: {e}")
     out["location"]["source"] = source

@@ -125,7 +125,6 @@ def render(region: dict, snap: dict, results: dict, source: str,
     if pm_g in ("나쁨", "매우나쁨"):
         L.append(f"  😷 초미세먼지 {pm_g} — 마스크 착용, 격한 야외운동 자제")
 
-
     # 활동별 최고 지역
     if all_results:
         L.append("")
