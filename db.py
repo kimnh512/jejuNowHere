@@ -38,15 +38,17 @@ def fetch_regions() -> list[dict]:
 
 
 def purge_future(horizon_hours: int) -> None:
-    """+horizon 이후의 예보 행 삭제 (실시간 중심 정책)."""
+    """+horizon 이후의 예보 행 삭제 (실시간 중심 정책).
+
+    ※ DB의 now()는 서버 시간대(클라우드는 UTC)라 KST로 저장된 예보가
+      전부 지워질 수 있음 → 반드시 파이썬(수집기와 같은 TZ) 기준으로 비교.
+    """
+    from datetime import datetime, timedelta
+    cutoff = datetime.now() + timedelta(hours=horizon_hours)
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM village_forecast WHERE fcst_at > now() + %s * interval '1 hour'",
-                (horizon_hours,))
-            cur.execute(
-                "DELETE FROM ultra_forecast WHERE fcst_at > now() + %s * interval '1 hour'",
-                (horizon_hours,))
+            cur.execute("DELETE FROM village_forecast WHERE fcst_at > %s", (cutoff,))
+            cur.execute("DELETE FROM ultra_forecast WHERE fcst_at > %s", (cutoff,))
 
 
 def log_run(source: str, started_at, finished_at, status: str, rows: int, error: str | None = None):
