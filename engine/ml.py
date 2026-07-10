@@ -62,8 +62,11 @@ def train_one(X: list[list], y: list[int], epochs=400, lr=0.1, l2=0.01):
     return w, b
 
 
-def train_all(feedback_rows: list[dict]) -> dict:
-    """reco_feedback 행들로 활동별 모델 학습 → ml_params.json 저장."""
+def train_from_rows(feedback_rows: list[dict]) -> tuple[dict, dict]:
+    """reco_feedback 행들로 활동별 모델 학습 (저장 없음).
+
+    반환: (params, report) — params = {활동: {w,b,mu,sigma,n}}
+    """
     by_act = defaultdict(list)
     for row in feedback_rows:
         feats = json.loads(row["features"])
@@ -85,7 +88,12 @@ def train_all(feedback_rows: list[dict]) -> dict:
                       if (_sigmoid(sum(a * c for a, c in zip(w, xi)) + b) >= 0.5) == bool(yi))
         params[act] = {"w": w, "b": b, "mu": mu, "sigma": sigma, "n": n}
         report[act] = f"학습 완료 (n={n}, 학습정확도 {correct / n:.0%})"
+    return params, report
 
+
+def train_all(feedback_rows: list[dict]) -> dict:
+    """학습 + ml_params.json 파일 저장 (터미널 CLI용)."""
+    params, report = train_from_rows(feedback_rows)
     if params:
         existing = load_params()
         existing.update(params)

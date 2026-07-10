@@ -23,6 +23,9 @@ _client = None
 _cache: dict = {}          # 같은 조건 반복 호출 시 LLM 재호출 방지 (비용·지연 절감)
 CACHE_TTL_SEC = 900        # 15분 — 날씨 스냅샷 갱신 주기와 비슷하게
 
+# 지원 언어 (관광객용): ko 한국어 / en 영어 / zh 중국어 간체
+LANGS = {"ko": "한국어", "en": "English", "zh": "简体中文 (Simplified Chinese)"}
+
 
 def _get_client():
     global _client
@@ -73,17 +76,25 @@ RESPONSE_SCHEMA = {
 }
 
 
-def generate(payload: dict) -> dict:
+def generate(payload: dict, lang: str = "ko") -> dict:
     """3종 문구 생성. payload는 api.py의 /nlg가 조립한 dict.
 
-    반환: {"recommendation_message", "outfit", "place_intro", "llm": bool}
+    lang: "ko" | "en" | "zh" — 문장·복장 단어를 해당 언어로 생성.
+    반환: {"recommendation_message", "outfit", "place_intro", "llm": bool, "lang"}
     """
+    lang = lang if lang in LANGS else "ko"
     key = hashlib.md5(
-        json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()
+        (lang + json.dumps(payload, ensure_ascii=False, sort_keys=True)).encode()
     ).hexdigest()
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < CACHE_TTL_SEC:
         return dict(hit[1])
+
+    lang_rule = (
+        f"\n\n[출력 언어] 세 필드(recommendation_message, outfit 항목, place_intro) 모두 "
+        f"반드시 {LANGS[lang]}로 작성하세요. 장소명 고유명사는 원어 그대로 두되 "
+        f"필요하면 로마자/한자 표기를 병기하세요."
+    ) if lang != "ko" else ""
 
     client = _get_client()
     if client is not None:
@@ -93,23 +104,48 @@ def generate(payload: dict) -> dict:
                 temperature=0.7,
                 response_format=RESPONSE_SCHEMA,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": SYSTEM_PROMPT + lang_rule},
                     {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
                 ],
             )
             data = json.loads(completion.choices[0].message.content)
             data["llm"] = True
+            data["lang"] = lang
             _cache[key] = (time.time(), dict(data))
             return data
         except Exception:
             pass  # 폴백으로
-    out = _fallback(payload)
+    out = _fallback(payload, lang)
     _cache[key] = (time.time(), dict(out))
     return out
 
 
-def _fallback(payload: dict) -> dict:
-    """LLM 불가 시 규칙 기반 문구 (키 없음/장애/타임아웃)."""
+# 폴백용 번역 사전 (LLM 불가 시에만 사용 — 고정 어휘라 사전으로 충분)
+_ACT_I18N = {
+    "러닝": {"en": "running", "zh": "跑步"},
+    "강아지산책": {"en": "a dog walk", "zh": "遛狗"},
+    "등산": {"en": "hiking", "zh": "登山"},
+    "드론": {"en": "flying a drone", "zh": "无人机飞行"},
+    "서핑": {"en": "surfing", "zh": "冲浪"},
+    "골프": {"en": "golf", "zh": "高尔夫"},
+    "쇼핑": {"en": "shopping", "zh": "购物"},
+}
+_OUTFIT_I18N = {
+    "볼캡": {"en": "cap", "zh": "棒球帽"},
+    "반팔 티셔츠": {"en": "t-shirt", "zh": "短袖T恤"},
+    "반바지": {"en": "shorts", "zh": "短裤"},
+    "러닝화": {"en": "running shoes", "zh": "跑鞋"},
+    "바람막이": {"en": "windbreaker", "zh": "防风外套"},
+    "긴바지": {"en": "long pants", "zh": "长裤"},
+    "방한 모자": {"en": "beanie", "zh": "保暖帽"},
+    "기모 상의": {"en": "fleece top", "zh": "抓绒上衣"},
+    "장갑": {"en": "gloves", "zh": "手套"},
+    "운동화": {"en": "sneakers", "zh": "运动鞋"},
+}
+
+
+def _fallback(payload: dict, lang: str = "ko") -> dict:
+    """LLM 불가 시 규칙 기반 문구 (키 없음/장애/타임아웃). ko/en/zh 지원."""
     place = payload.get("place", {}).get("name", "제주")
     activity = payload.get("activity", "러닝")
     score = payload.get("suitability", {}).get("score")
@@ -126,13 +162,31 @@ def _fallback(payload: dict) -> dict:
         else:
             outfit = ["방한 모자", "기모 상의", "긴바지", "장갑", "러닝화"]
 
-    msg = f"오늘은 {place}에서 {activity}하는 것을 추천드립니다."
-    if score is not None:
-        msg += f" 현재 적합도는 {score}점이에요!"
+    if lang == "en":
+        act = _ACT_I18N.get(activity, {}).get("en", activity)
+        outfit = [_OUTFIT_I18N.get(o, {}).get("en", o) for o in outfit]
+        msg = f"Today we recommend {act} at {place}."
+        if score is not None:
+            msg += f" Current suitability score: {score}."
+        intro = f"{place} is a great spot for {act} in Jeju."
+    elif lang == "zh":
+        act = _ACT_I18N.get(activity, {}).get("zh", activity)
+        outfit = [_OUTFIT_I18N.get(o, {}).get("zh", o) for o in outfit]
+        msg = f"今天推荐您在{place}{act}。"
+        if score is not None:
+            msg += f"当前适宜度为{score}分。"
+        intro = f"{place}是济州岛{act}的好去处。"
+    else:
+        msg = f"오늘은 {place}에서 {activity}하는 것을 추천드립니다."
+        if score is not None:
+            msg += f" 현재 적합도는 {score}점이에요!"
+        intro = (payload.get("place", {}).get("features")
+                 or f"{place}은(는) 제주에서 {activity}하기 좋은 곳이에요.")
+
     return {
         "recommendation_message": msg,
         "outfit": outfit,
-        "place_intro": payload.get("place", {}).get("features")
-                       or f"{place}은(는) 제주에서 {activity}하기 좋은 곳이에요.",
+        "place_intro": intro,
         "llm": False,
+        "lang": lang,
     }

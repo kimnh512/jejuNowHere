@@ -128,13 +128,19 @@ def build_snapshots(regions: list[dict], raw: dict, now: datetime) -> dict[int, 
 
 def _timeline(snap: dict, reg: dict, ult: list, vil: list,
               now: datetime) -> list[dict]:
-    """지금/+1h/+2h/+3h 시간축 미니 스냅샷 (각각 score_all 입력 형식)."""
+    """지금/+1h/+2h/+3h 시간축 미니 스냅샷 (각각 score_all 입력 형식).
+
+    각 셀은 '그 시각에 활동을 시작하면'의 적합도:
+      - 강수 veto: 시작 시각 ~ +1h 내 비/눈
+      - 강수확률(pop3): 시작 후 3시간 최대값
+      - 낙뢰: 시작 후 3시간 최대값
+    """
     base = now.replace(minute=0, second=0, microsecond=0)
     by_hour = {}
     for r in vil + ult:  # ultra가 village를 덮어씀 (더 정밀)
         by_hour[r["fcst_at"]] = r
 
-    def window(k, key, span):
+    def window(k: int, key: str, span: int):
         vals = [by_hour[base + timedelta(hours=j)].get(key)
                 for j in range(k, k + span + 1)
                 if base + timedelta(hours=j) in by_hour]
@@ -185,15 +191,14 @@ CREATE TABLE IF NOT EXISTS reco_feedback (
 
 
 def save_feedback(region_id: int, activity: str, rule_score, features_json: str,
-                  label: int, ts=None):
-    from datetime import datetime as _dt
+                  label: int, ts: datetime | None = None):
     with db.get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(FEEDBACK_DDL)
             cur.execute(
                 """INSERT INTO reco_feedback (ts, region_id, activity, rule_score, features, label)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
-                (ts or _dt.now(), region_id, activity, rule_score,
+                (ts or datetime.now(), region_id, activity, rule_score,
                  features_json, label),
             )
 
@@ -203,3 +208,39 @@ def fetch_feedback() -> list[dict]:
         return _fetch("SELECT * FROM reco_feedback ORDER BY id")
     except Exception:
         return []
+
+
+# ── 학습된 ML 모델 저장 (서버 파일시스템은 재배포 시 초기화 → DB에 보관) ──
+ML_DDL = """
+CREATE TABLE IF NOT EXISTS ml_models (
+    activity   TEXT PRIMARY KEY,
+    params     TEXT NOT NULL,      -- JSON: w, b, mu, sigma, n
+    n          INT NOT NULL,
+    trained_at TIMESTAMP NOT NULL
+)"""
+
+
+def save_ml_params(params: dict):
+    """활동별 모델 파라미터 upsert. params = {활동: {w,b,mu,sigma,n}}"""
+    import json as _json
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(ML_DDL)
+            for act, p in params.items():
+                cur.execute(
+                    """INSERT INTO ml_models (activity, params, n, trained_at)
+                       VALUES (%s, %s, %s, %s)
+                       ON CONFLICT (activity) DO UPDATE SET
+                         params = EXCLUDED.params, n = EXCLUDED.n,
+                         trained_at = EXCLUDED.trained_at""",
+                    (act, _json.dumps(p), p.get("n", 0), datetime.now()),
+                )
+
+
+def load_ml_params() -> dict:
+    import json as _json
+    try:
+        rows = _fetch("SELECT activity, params FROM ml_models")
+        return {r["activity"]: _json.loads(r["params"]) for r in rows}
+    except Exception:
+        return {}

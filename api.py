@@ -11,16 +11,19 @@
     GET /scores?lat=..&lon=..         활동별 적합도 + 지금/+1h/+2h/+3h 타임라인
     GET /scores?region=애월읍         (앱 GPS 대신 지역명으로도 가능)
     GET /recommend?lat=..&lon=..      가면 좋을 곳 5선 (카카오 장소 포함)
-    GET /nlg?activity=러닝&region=..   GPT 문구 3종 (추천 문장·복장·장소 소개)
+    GET /nlg?activity=러닝&region=..&lang=ko|en|zh   GPT 문구 3종 (다국어)
+    POST /feedback                    "좋았어요/별로" 수집 → 30건부터 자동 재학습
 
 앱에서는 기기 GPS의 lat/lon을 그대로 쿼리로 넘기면 됩니다.
 스냅샷은 60초 캐시 — 데이터 자체가 매시 갱신이므로 충분합니다.
 """
+import json
 import time
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 import config
 import db
@@ -32,18 +35,21 @@ app.add_middleware(  # 앱/웹 개발 편의를 위한 CORS 허용
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
-_cache: dict = {"t": 0.0, "snaps": None, "regions": None}
+_cache: dict = {"t": 0.0, "snaps": None, "regions": None, "ml": {}}
 CACHE_SEC = 60
 
 
 def get_data():
-    """지역 목록 + 스냅샷 (60초 캐시)."""
+    """지역 목록 + 스냅샷 + ML 모델 (60초 캐시)."""
     now = time.time()
     if _cache["snaps"] is None or now - _cache["t"] > CACHE_SEC:
         regions = db.fetch_regions()
         if not regions:
             raise HTTPException(503, "locations 테이블이 비어 있습니다 (seed_locations.py 실행 필요)")
-        _cache.update(t=now, regions=regions, snaps=datasource.load(regions))
+        # 모델: 파일(로컬 CLI 학습분) < DB(서버 자동학습분) 우선
+        ml_params = {**ml.load_params(), **datasource.load_ml_params()}
+        _cache.update(t=now, regions=regions,
+                      snaps=datasource.load(regions), ml=ml_params)
     return _cache["regions"], _cache["snaps"]
 
 
@@ -95,7 +101,7 @@ def scores(region: str | None = None,
     regions, snaps = get_data()
     reg, source = resolve_region(regions, region, lat, lon)
     snap = snaps[reg["region_id"]]
-    params = ml.load_params()
+    params = _cache["ml"]
 
     results = scoring.score_all(snap)
     ml_used = []
@@ -143,13 +149,15 @@ def scores(region: str | None = None,
 def nlg_message(activity: str = "러닝",
                 place: str | None = Query(None, description="추천 장소명 (예: 서우봉). 없으면 지역명 사용"),
                 place_features: str | None = Query(None, description="장소 특징 (소개 문구 근거)"),
+                lang: str = Query("ko", pattern="^(ko|en|zh)$",
+                                  description="문구 언어: ko 한국어 / en 영어 / zh 중국어"),
                 region: str | None = None,
                 lat: float | None = Query(None, ge=-90, le=90),
                 lon: float | None = Query(None, ge=-180, le=180)):
-    """GPT 문구 3종 — 앱 홈 화면용.
+    """GPT 문구 3종 — 앱 홈 화면용 (한국어/영어/중국어).
 
     응답: recommendation_message(추천 문장), outfit(복장 리스트),
-          place_intro(장소 소개 한마디), llm(GPT 사용 여부)
+          place_intro(장소 소개 한마디), llm(GPT 사용 여부), lang(언어)
     """
     regions, snaps = get_data()
     reg, source = resolve_region(regions, region, lat, lon)
@@ -181,7 +189,7 @@ def nlg_message(activity: str = "러닝",
         "time_of_day": ("아침" if 5 <= base_hour < 11 else "낮" if 11 <= base_hour < 17
                         else "저녁" if 17 <= base_hour < 21 else "밤"),
     }
-    out = nlg.generate(payload)
+    out = nlg.generate(payload, lang)
     out["location"] = {"region": reg["name"], "city": reg["city"], "source": source}
     out["suitability"] = payload["suitability"]
     return out
@@ -198,3 +206,54 @@ def recommend(region: str | None = None,
     out = places.recommend(reg, regions)
     out["location"]["source"] = source
     return out
+
+
+# ── ML 피드백 수집 ───────────────────────────────────────────────
+class FeedbackIn(BaseModel):
+    """앱의 '좋았어요/별로였어요' 평가 한 건."""
+    activity: str = Field(examples=["러닝"])
+    good: bool = Field(description="True=좋았어요(1) / False=별로였어요(0)")
+    region: str | None = None
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
+
+
+@app.post("/feedback")
+def feedback(body: FeedbackIn):
+    """평가 저장 → 그 시각의 날씨 특성과 함께 학습 데이터로 축적.
+
+    활동별 30건(양/음 라벨 포함)부터 자동 재학습되어 /scores 점수에
+    블렌딩됩니다 (응답의 ml_active로 확인).
+    """
+    if body.activity not in boundaries.ACTIVITIES:
+        raise HTTPException(404, f"'{body.activity}'은 지원 활동이 아닙니다: {boundaries.ACTIVITIES}")
+    regions, snaps = get_data()
+    reg, source = resolve_region(regions, body.region, body.lat, body.lon)
+    snap = snaps[reg["region_id"]]
+
+    results = scoring.score_all(snap)
+    rule_score = results[body.activity]["score"]
+    features = json.dumps(ml.extract_features(snap), ensure_ascii=False)
+    datasource.save_feedback(reg["region_id"], body.activity, rule_score,
+                             features, 1 if body.good else 0)
+
+    # 자동 재학습 (해당 활동만 재계산 — 데이터가 작아 수십 ms 수준)
+    rows = datasource.fetch_feedback()
+    act_rows = [r for r in rows if r["activity"] == body.activity]
+    trained = False
+    if len(act_rows) >= ml.MIN_SAMPLES:
+        params, report = ml.train_from_rows(act_rows)
+        if body.activity in params:
+            datasource.save_ml_params({body.activity: params[body.activity]})
+            _cache["t"] = 0.0          # 다음 요청에서 새 모델 반영
+            trained = True
+
+    return {
+        "saved": True,
+        "activity": body.activity,
+        "region": reg["name"],
+        "label": 1 if body.good else 0,
+        "total_for_activity": len(act_rows),
+        "needed_for_ml": max(0, ml.MIN_SAMPLES - len(act_rows)),
+        "retrained": trained,
+    }
