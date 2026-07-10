@@ -1,0 +1,44 @@
+# 매시 자동 수집 — GitHub Actions (public 레포 무료)
+# 필요한 Secrets (레포 Settings > Secrets and variables > Actions):
+#   DATABASE_URL   : Supabase Session pooler 연결 문자열
+#   DATA_GO_KR_KEY : 공공데이터포털 인증키
+name: collect-weather
+
+on:
+  schedule:
+    - cron: '50 * * * *'   # 매시 50분 (UTC/KST 무관 — 매시라서 동일)
+  workflow_dispatch:        # Actions 탭에서 수동 실행 버튼
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Seoul                                # 수집기가 한국시각 기준으로 동작
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests psycopg2-binary python-dotenv
+      - name: nowcast (실황)
+        run: python run.py nowcast
+        continue-on-error: true
+      - name: ultra (초단기예보)
+        run: python run.py ultra
+        continue-on-error: true
+      - name: jeju_air (미세먼지)
+        run: python run.py jeju_air
+        continue-on-error: true
+      - name: village (단기예보)
+        run: python run.py village
+        continue-on-error: true
+      - name: uv (자외선)
+        run: python run.py uv
+        continue-on-error: true

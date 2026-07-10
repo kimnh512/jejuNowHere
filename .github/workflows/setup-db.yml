@@ -1,0 +1,23 @@
+# DB 최초 1회 초기화 — Actions 탭에서 수동 실행 (Run workflow)
+# 테이블 생성(schema.sql) + 읍면 14곳 시드(seed_locations.py)
+name: setup-db
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests psycopg2-binary python-dotenv
+      - name: 테이블 생성
+        run: psql "$DATABASE_URL" -f schema.sql
+      - name: 읍면 14곳 시드
+        run: python seed_locations.py
