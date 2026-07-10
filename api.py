@@ -128,6 +128,16 @@ def scores(region: str | None = None,
         best[act] = [{"region": snaps[rid]["name"], "score": s}
                      for rid, s in ranked[:3]]
 
+    # 시간별 날씨 (앱의 기온/바람/강수 카드용 — 지금/+1h/+2h/+3h)
+    base_hour = datetime.now().hour
+    hourly = []
+    for i, h in enumerate(snap.get("hours") or []):
+        if h:
+            hourly.append({"hour": (base_hour + i) % 24,
+                           "tmp": h.get("tmp"), "feel": h.get("feel"),
+                           "reh": h.get("reh"), "wsd": h.get("wsd"),
+                           "pop": h.get("pop3")})
+
     return {
         "location": {"region": reg["name"], "city": reg["city"],
                      "lat": reg["lat"], "lon": reg["lon"], "source": source},
@@ -141,6 +151,7 @@ def scores(region: str | None = None,
                            "ml": a in ml_used}
                        for a, r in results.items()},
         "best_regions": best,
+        "hourly": hourly,
         "missing": snap.get("missing", []),
     }
 
