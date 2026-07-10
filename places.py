@@ -48,8 +48,10 @@ def kakao_search(query: str, lat: float, lon: float, radius=10000, size=5) -> li
                 "radius": radius, "sort": "distance", "size": size},
         timeout=config.TIMEOUT,
     )
-    if r.status_code == 401:
-        sys.exit("카카오 REST 키가 유효하지 않습니다. .env의 KAKAO_REST_KEY를 확인하세요.")
+    if r.status_code in (401, 403):
+        raise RuntimeError(
+            "카카오 키 거부(401) — developers.kakao.com 앱 키 4개 중 "
+            "'REST API 키'를 넣었는지 확인하세요 (JavaScript 키 아님)")
     r.raise_for_status()
     return r.json().get("documents", [])
 
