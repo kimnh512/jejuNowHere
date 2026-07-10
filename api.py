@@ -61,6 +61,12 @@ def resolve_region(regions, region: str | None, lat: float | None, lon: float | 
     raise HTTPException(422, "region 또는 lat+lon 파라미터가 필요합니다")
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/docs")
+
+
 @app.get("/health")
 def health():
     try:
