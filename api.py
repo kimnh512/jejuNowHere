@@ -211,10 +211,13 @@ def recommend(region: str | None = None,
               lat: float | None = Query(None, ge=-90, le=90),
               lon: float | None = Query(None, ge=-180, le=180)):
     if not config.KAKAO_REST_KEY:
-        raise HTTPException(503, ".env에 KAKAO_REST_KEY가 없습니다")
+        raise HTTPException(503, "서버에 KAKAO_REST_KEY가 없습니다 (Render Environment 확인)")
     regions, snaps = get_data()
     reg, source = resolve_region(regions, region, lat, lon)
-    out = places.recommend(reg, regions)
+    try:
+        out = places.recommend(reg, regions)
+    except Exception as e:                       # 카카오 호출 실패 원인을 그대로 노출
+        raise HTTPException(502, f"카카오 장소 검색 실패: {e}")
     out["location"]["source"] = source
     return out
 
